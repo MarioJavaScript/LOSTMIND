@@ -5,6 +5,7 @@ import java.util.Comparator;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -12,7 +13,8 @@ import java.util.PriorityQueue;
 import java.util.Queue;
 import java.util.Set;
 
-// Se eligieron listas de adyacencia para guardar solo los vecinos transitables.
+// Representacion: listas ligadas de adyacencia (LinkedList); cada vertice guarda solo
+// sus vecinos transitables, en el orden arriba, derecha, abajo, izquierda.
 public final class Grafo {
     private record Paso(int id, int padre) { }
     private record Distancia(int id, long valor) { }
@@ -41,7 +43,7 @@ public final class Grafo {
             Vertice vertice = vertices.obtener(id);
             int fila = vertice.getFila();
             int columna = vertice.getColumna();
-            List<Arcos> vecinos = new ArrayList<>(4);
+            List<Arcos> vecinos = new LinkedList<>();
             agregarVecino(lab, vecinos, id, fila - 1, columna);
             agregarVecino(lab, vecinos, id, fila, columna + 1);
             agregarVecino(lab, vecinos, id, fila + 1, columna);
@@ -92,8 +94,8 @@ public final class Grafo {
         }
 
         List<Vertice> camino = reconstruir(predecesores, encontrado);
-        ultimoResultadoDFS = new Resultado(visitados, camino, encontrado,
-                System.nanoTime() - inicio);
+        long tiempo = System.nanoTime() - inicio;
+        ultimoResultadoDFS = new Resultado(visitados, camino, encontrado, tiempo);
         return ultimoResultadoDFS.getVisitados();
     }
 
@@ -125,8 +127,8 @@ public final class Grafo {
         }
 
         List<Vertice> camino = reconstruir(predecesores, encontrado);
-        ultimoResultadoBFS = new Resultado(visitados, camino, encontrado,
-                System.nanoTime() - inicio);
+        long tiempo = System.nanoTime() - inicio;
+        ultimoResultadoBFS = new Resultado(visitados, camino, encontrado, tiempo);
         return ultimoResultadoBFS.getVisitados();
     }
 
@@ -170,8 +172,8 @@ public final class Grafo {
         }
 
         List<Vertice> camino = reconstruir(predecesores, encontrado);
-        ultimoResultadoDijkstra = new Resultado(visitados, camino, encontrado,
-                System.nanoTime() - inicio);
+        long tiempo = System.nanoTime() - inicio;
+        ultimoResultadoDijkstra = new Resultado(visitados, camino, encontrado, tiempo);
         return ultimoResultadoDijkstra.getVisitados();
     }
 

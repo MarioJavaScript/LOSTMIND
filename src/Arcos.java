@@ -9,10 +9,6 @@ public final class Arcos {
         this.costo = 1;
     }
 
-    public int getIdOrigen() {
-        return idOrigen;
-    }
-
     public int getIdDestino() {
         return idDestino;
     }

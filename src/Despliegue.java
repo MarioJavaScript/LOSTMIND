@@ -7,6 +7,8 @@ public final class Despliegue {
     private static final String LEYENDA = "Pared: + - |  Transitable: espacio  "
             + "Entrada: E  Salida: S  Visitado: .  Actual: @  Camino final: *";
 
+    private static final long PAUSA_MAXIMA = 5000;
+
     private final Laberinto laberinto;
     private final Resultado resultado;
     private final Scanner entrada;
@@ -35,7 +37,7 @@ public final class Despliegue {
                     "Paso " + (paso + 1) + " de " + ordenVisita.size()));
             if (manual) {
                 System.out.print("ENTER para avanzar; f para saltar al final: ");
-                if (!entrada.hasNextLine() || entrada.nextLine().trim().equalsIgnoreCase("f")) {
+                if (!entrada.hasNextLine() || entrada.nextLine().strip().equalsIgnoreCase("f")) {
                     saltar = true;
                 }
             } else if (pausa > 0) {
@@ -48,11 +50,7 @@ public final class Despliegue {
             }
         }
 
-        mostrarFinal(null);
-    }
-
-    public void mostrarResultado(String nombre) {
-        mostrarFinal(nombre);
+        mostrarFinal(null, true);
     }
 
     private String pedirControl() {
@@ -61,22 +59,27 @@ public final class Despliegue {
             if (!entrada.hasNextLine()) {
                 return "f";
             }
-            String valor = entrada.nextLine().trim();
+            // strip() solo se aplica a la entrada del menu, nunca a las lineas del laberinto.
+            String valor = entrada.nextLine().strip();
             if (valor.isEmpty() || valor.equalsIgnoreCase("f")) {
                 return valor;
             }
             try {
-                if (Long.parseLong(valor) >= 0) {
+                long milisegundos = Long.parseLong(valor);
+                if (milisegundos >= 0 && milisegundos <= PAUSA_MAXIMA) {
                     return valor;
                 }
+                System.out.println("La pausa debe estar entre 0 y " + PAUSA_MAXIMA + " ms.");
+                continue;
             } catch (NumberFormatException excepcion) {
                 // Pedir otro valor.
             }
-            System.out.println("Escribe ENTER, f o un numero de milisegundos no negativo.");
+            System.out.println("Escribe ENTER, f o un numero de milisegundos entre 0 y "
+                    + PAUSA_MAXIMA + ".");
         }
     }
 
-    private void mostrarFinal(String nombre) {
+    public void mostrarFinal(String nombre, boolean limpiar) {
         Set<Integer> visitados = new HashSet<>();
         for (Vertice vertice : resultado.getVisitados()) {
             visitados.add(vertice.getId());
@@ -102,7 +105,7 @@ public final class Despliegue {
         salida.append("Vertices visitados: ").append(resultado.getVisitados().size())
                 .append('\n').append("Tiempo: ").append(resultado.getTiempoNanos())
                 .append(" nanosegundos\n");
-        imprimir(salida.toString());
+        imprimir(salida.toString(), limpiar);
     }
 
     private String renderizar(Set<Integer> visitados, int actual, Set<Integer> camino,
@@ -156,7 +159,13 @@ public final class Despliegue {
     }
 
     private void imprimir(String texto) {
-        if (usarAnsi) {
+        imprimir(texto, true);
+    }
+
+    private void imprimir(String texto, boolean limpiar) {
+        if (!limpiar) {
+            System.out.print("\n==============================\n" + texto);
+        } else if (usarAnsi) {
             System.out.print("\033[H\033[2J" + texto);
         } else {
             System.out.print("\n------------------------------\n" + texto);

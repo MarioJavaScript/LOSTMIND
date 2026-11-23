@@ -18,14 +18,6 @@ public final class Vertices {
         return vertices.get(id);
     }
 
-    public boolean contiene(int id) {
-        return vertices.containsKey(id);
-    }
-
-    public int tamano() {
-        return vertices.size();
-    }
-
     public List<Integer> idsOrdenados() {
         List<Integer> ids = new ArrayList<>(vertices.keySet());
         Collections.sort(ids);
