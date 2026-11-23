@@ -1,3 +1,7 @@
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Scanner;
 
@@ -46,11 +50,17 @@ public final class Main {
     }
 
     private void cargar() {
-        System.out.print("Ruta del archivo: ");
+        System.out.print("Ruta del archivo (ENTER vacio para elegir un ejemplo): ");
         if (!entrada.hasNextLine()) {
             return;
         }
         String ruta = entrada.nextLine();
+        if (ruta.isEmpty()) {
+            ruta = elegirEjemplo();
+            if (ruta == null) {
+                return;
+            }
+        }
         // "Copiar como ruta" de Windows agrega comillas en los extremos; se quitan (sin trim).
         if (ruta.length() >= 2 && ruta.startsWith("\"") && ruta.endsWith("\"")) {
             ruta = ruta.substring(1, ruta.length() - 1);
@@ -65,6 +75,41 @@ public final class Main {
         } catch (LaberintoInvalidoException | RuntimeException excepcion) {
             System.out.println("No se pudo cargar el laberinto: " + excepcion.getMessage());
         }
+    }
+
+    // Lista los .txt de ejemplos/ (y ejemplos/invalidos/) y devuelve la ruta elegida.
+    private String elegirEjemplo() {
+        List<Path> archivos;
+        try (var flujo = Files.walk(Path.of("ejemplos"), 2)) {
+            archivos = flujo.filter(Files::isRegularFile)
+                    .filter(ruta -> ruta.getFileName().toString().endsWith(".txt"))
+                    .sorted(Comparator.comparing(Path::toString))
+                    .toList();
+        } catch (IOException | RuntimeException excepcion) {
+            System.out.println("No se pudo leer la carpeta ejemplos: " + excepcion.getMessage());
+            return null;
+        }
+        if (archivos.isEmpty()) {
+            System.out.println("No hay ejemplos en la carpeta ejemplos.");
+            return null;
+        }
+        for (int indice = 0; indice < archivos.size(); indice++) {
+            System.out.println((indice + 1) + ") " + archivos.get(indice).toString().replace(java.io.File.separatorChar, '/'));
+        }
+        System.out.print("Numero de ejemplo: ");
+        if (!entrada.hasNextLine()) {
+            return null;
+        }
+        try {
+            int numero = Integer.parseInt(entrada.nextLine().strip());
+            if (numero >= 1 && numero <= archivos.size()) {
+                return archivos.get(numero - 1).toString();
+            }
+        } catch (NumberFormatException excepcion) {
+            // Se informa abajo.
+        }
+        System.out.println("Ejemplo invalido; no se cargo nada.");
+        return null;
     }
 
     private void resolver(Algoritmo algoritmo) {
