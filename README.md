@@ -28,7 +28,7 @@ javac -encoding UTF-8 src/*.java
 java -cp src Main
 ```
 
-Cuando el menú pida una ruta, se puede escribir, por ejemplo, `ejemplos/con_marcas.txt`. Las rutas relativas se interpretan desde el directorio donde se ejecuta Java.
+Si en la opción 1 se deja la ruta vacía (ENTER), el programa lista los archivos de `ejemplos/` y permite elegir uno por número. Cuando el menú pida una ruta, se puede escribir, por ejemplo, `ejemplos/con_marcas.txt`. Las rutas relativas se interpretan desde el directorio donde se ejecuta Java.
 
 ## Formato de los laberintos
 
