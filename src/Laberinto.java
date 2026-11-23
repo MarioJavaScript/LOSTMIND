@@ -43,6 +43,10 @@ public final class Laberinto {
         if (renglones.isEmpty()) {
             throw new LaberintoInvalidoException("El archivo esta vacio.");
         }
+        // Se ignora el BOM de UTF-8 si el archivo lo trae.
+        if (renglones.get(0).startsWith("\uFEFF")) {
+            renglones.set(0, renglones.get(0).substring(1));
+        }
 
         int columnas = renglones.get(0).length();
         if (columnas == 0) {

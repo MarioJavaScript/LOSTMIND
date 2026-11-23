@@ -13,6 +13,7 @@ public final class PruebaCarga {
         aprobados += probarValido(base, "no_cuadrado.txt", 3, 9, 0, 4, 2, 4);
         aprobados += probarValido(base, "con_numerales.txt", 5, 5, 0, 2, 4, 2);
         aprobados += probarValido(base, "sin_solucion.txt", 5, 5, 0, 2, 4, 2);
+        aprobados += probarValido(base, "sin_solucion_exploracion.txt", 12, 30, 0, 2, 11, 2);
         aprobados += probarValido(base, "espacios_finales.txt", 3, 6, 0, 2, 2, 2);
         aprobados += probarValido(base, "espacios_extremos.txt", 3, 6, 0, 1, 2, 1);
         aprobados += probarValido(base, "grande_25x60.txt", 25, 60, 0, 1, 24, 58);

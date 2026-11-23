@@ -44,7 +44,7 @@ public final class PruebaAlgoritmos {
                     || longitud(resultadoBFS) != longitud(resultadoDijkstra)) {
                 throw new AssertionError("BFS y Dijkstra discrepan en " + nombre);
             }
-            if (nombre.equals("sin_solucion.txt") && (resultadoDFS.isEncontrado()
+            if (nombre.startsWith("sin_solucion") && (resultadoDFS.isEncontrado()
                     || resultadoBFS.isEncontrado() || resultadoDijkstra.isEncontrado())) {
                 throw new AssertionError("Debe indicarse que no existe camino en " + nombre);
             }

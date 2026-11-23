@@ -18,7 +18,8 @@ public final class Main {
             if (!entrada.hasNextLine()) {
                 return;
             }
-            String opcion = entrada.nextLine().trim();
+            // strip() solo se aplica a la entrada del menu, nunca a las lineas del laberinto.
+            String opcion = entrada.nextLine().strip();
             switch (opcion) {
                 case "1" -> cargar();
                 case "2" -> resolver(Algoritmo.DFS);
@@ -50,6 +51,10 @@ public final class Main {
             return;
         }
         String ruta = entrada.nextLine();
+        // "Copiar como ruta" de Windows agrega comillas en los extremos; se quitan (sin trim).
+        if (ruta.length() >= 2 && ruta.startsWith("\"") && ruta.endsWith("\"")) {
+            ruta = ruta.substring(1, ruta.length() - 1);
+        }
         try {
             Laberinto nuevo = Laberinto.cargar(ruta);
             Grafo nuevoGrafo = new Grafo(nuevo);
@@ -88,8 +93,8 @@ public final class Main {
                 }
             }
             new Despliegue(laberinto, resultado(algoritmo), entrada)
-                    .mostrarResultado(algoritmo == Algoritmo.DIJKSTRA
-                            ? "Dijkstra" : algoritmo.name());
+                    .mostrarFinal(algoritmo == Algoritmo.DIJKSTRA
+                            ? "Dijkstra" : algoritmo.name(), false);
         }
     }
 
