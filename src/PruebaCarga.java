@@ -14,6 +14,9 @@ public final class PruebaCarga {
         aprobados += probarValido(base, "con_numerales.txt", 5, 5, 0, 2, 4, 2);
         aprobados += probarValido(base, "sin_solucion.txt", 5, 5, 0, 2, 4, 2);
         aprobados += probarValido(base, "espacios_finales.txt", 3, 6, 0, 2, 2, 2);
+        aprobados += probarValido(base, "espacios_extremos.txt", 3, 6, 0, 1, 2, 1);
+        aprobados += probarValido(base, "grande_25x60.txt", 25, 60, 0, 1, 24, 58);
+        aprobados += probarValido(base, "minimo.txt", 1, 2, 0, 0, 0, 1);
 
         aprobados += probarInvalido(base, "renglones_distintos.txt", "columnas");
         aprobados += probarInvalido(base, "caracter_invalido.txt", "Caracter invalido");
@@ -47,6 +50,13 @@ public final class PruebaCarga {
             if (archivo.equals("espacios_finales.txt")
                     && laberinto.getMatriz()[0][columnas - 1] != ' ') {
                 throw new AssertionError("Se perdio el espacio final: " + ruta);
+            }
+            if (archivo.equals("espacios_extremos.txt")) {
+                for (char[] renglon : laberinto.getMatriz()) {
+                    if (renglon[0] != ' ' || renglon[columnas - 1] != ' ') {
+                        throw new AssertionError("Se perdio un espacio extremo: " + ruta);
+                    }
+                }
             }
             System.out.println("OK " + ruta);
             return 1;
