@@ -86,6 +86,37 @@ En Windows, la terminal debe soportar UTF-8 y usar una fuente compatible con
 estos símbolos. Antes de ejecutar, puedes escribir `chcp 65001` en la terminal.
 Java configura la salida estándar con UTF-8.
 
+## Interfaz gráfica (Swing)
+
+La interfaz gráfica usa solo el JDK (Swing); no requiere dependencias externas ni
+JavaFX. Desde la raíz del repositorio, en Windows PowerShell:
+
+```powershell
+javac -encoding UTF-8 src\*.java
+java -cp src MainSwing
+```
+
+En Linux o macOS, cambia `src\*.java` por `src/*.java`. El botón **Cargar
+laberinto** o el menú **Archivo > Cargar laberinto** abre un selector de archivos.
+Si el archivo es inválido, se muestra el motivo y se conserva el laberinto anterior.
+El panel izquierdo **Laberintos** carga ejemplos con un clic; **Actualizar lista**
+vuelve a leer la carpeta y **Ejemplos inválidos** despliega archivos para probar
+los mensajes de error. Busca primero `ejemplos/`, luego `MapaLaberintos/` desde
+el directorio de ejecución y, por último, `ejemplos/` en el directorio padre
+del que contiene las clases compiladas. Para cambiar los nombres candidatos, edita la constante
+`CARPETAS_EJEMPLOS` en `VentanaLaberinto.java`.
+Los botones **DFS**, **BFS** y **Dijkstra** calculan y animan la exploración;
+**Comparar los tres** abre tres tarjetas con los resultados completos y calcula
+solo los que falten. **Volver** regresa a la vista principal. **Tiempos** muestra
+los tiempos de búsqueda y reconstrucción en nanosegundos y milisegundos.
+
+Durante la animación puedes usar **Pausar/Continuar**, **Siguiente paso**, el
+control de **Velocidad** o **Saltar al final**. El control **Zoom** cambia el tamaño
+de las celdas y **Ajustar** recupera el tamaño que cabe en el área visible, con
+un mínimo de 24 píxeles por celda. Las barras de desplazamiento permiten recorrer
+laberintos grandes. La leyenda bajo el laberinto explica los colores de cada capa.
+**Salir** o el cierre de la ventana termina la aplicación.
+
 ## Representación y algoritmos
 
 Se eligieron **listas ligadas de adyacencia** (`LinkedList`): cada celda transitable guarda solo sus vecinos transitables, lo que evita reservar espacio para pares de celdas sin conexión. El grafo es no dirigido y se representa con un arco en cada sentido; todos tienen costo 1 y conectan solo celdas horizontales o verticales. Se exploran en el orden **arriba, derecha, abajo, izquierda**. DFS usa una pila iterativa; BFS, una cola; Dijkstra, una cola de prioridad independiente de BFS.
