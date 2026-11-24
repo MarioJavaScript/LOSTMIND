@@ -1,4 +1,6 @@
 import java.io.IOException;
+import java.io.PrintStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Comparator;
@@ -11,9 +13,24 @@ public final class Main {
     private final Scanner entrada = new Scanner(System.in);
     private Laberinto laberinto;
     private Grafo grafo;
+    private TemaConsola tema = TemaConsola.ASCII;
 
     public static void main(String[] args) {
-        new Main().ejecutar();
+        System.setOut(new PrintStream(System.out, true, StandardCharsets.UTF_8));
+        Main programa = new Main();
+        if (List.of(args).contains("--unicode")) {
+            programa.tema = TemaConsola.UNICODE;
+        } else {
+            programa.elegirTema();
+        }
+        programa.ejecutar();
+    }
+
+    private void elegirTema() {
+        System.out.print("Estilo de símbolos: 1) ASCII  2) Unicode (ENTER = ASCII)\nOpcion: ");
+        if (entrada.hasNextLine() && entrada.nextLine().strip().equals("2")) {
+            tema = TemaConsola.UNICODE;
+        }
     }
 
     private void ejecutar() {
@@ -122,7 +139,9 @@ public final class Main {
             case DIJKSTRA -> grafo.caminoMasCorto();
         };
         Resultado resultado = resultado(algoritmo);
-        new Despliegue(laberinto, resultado, entrada).despliegaLaberinto(visitados);
+        Despliegue despliegue = new Despliegue(laberinto, resultado, entrada, tema);
+        despliegue.despliegaLaberinto(visitados);
+        tema = despliegue.getTema();
     }
 
     private void mostrarTodas() {
@@ -137,9 +156,10 @@ public final class Main {
                     case DIJKSTRA -> grafo.caminoMasCorto();
                 }
             }
-            new Despliegue(laberinto, resultado(algoritmo), entrada)
-                    .mostrarFinal(algoritmo == Algoritmo.DIJKSTRA
-                            ? "Dijkstra" : algoritmo.name(), false);
+            Despliegue despliegue = new Despliegue(laberinto, resultado(algoritmo), entrada, tema);
+            despliegue.mostrarFinal(algoritmo == Algoritmo.DIJKSTRA
+                    ? "Dijkstra" : algoritmo.name(), false);
+            tema = despliegue.getTema();
         }
     }
 

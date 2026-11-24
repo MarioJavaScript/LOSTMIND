@@ -1,12 +1,11 @@
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Scanner;
 import java.util.Set;
+import java.util.function.Supplier;
 
 public final class Despliegue {
-    private static final String LEYENDA = "Pared: + - |  Transitable: espacio  "
-            + "Entrada: E  Salida: S  Visitado: .  Actual: @  Camino final: *";
-
     private static final long PAUSA_MAXIMA = 5000;
 
     private final Laberinto laberinto;
@@ -14,13 +13,24 @@ public final class Despliegue {
     private final Scanner entrada;
     private final char[][] matriz;
     private final boolean usarAnsi;
+    private TemaConsola tema;
 
     public Despliegue(Laberinto laberinto, Resultado resultado, Scanner entrada) {
+        this(laberinto, resultado, entrada, TemaConsola.ASCII);
+    }
+
+    public Despliegue(Laberinto laberinto, Resultado resultado, Scanner entrada,
+                      TemaConsola tema) {
         this.laberinto = laberinto;
         this.resultado = resultado;
         this.entrada = entrada;
         this.matriz = laberinto.getMatriz();
         this.usarAnsi = System.console() != null && System.getenv("NO_COLOR") == null;
+        this.tema = tema;
+    }
+
+    public TemaConsola getTema() {
+        return tema;
     }
 
     public void despliegaLaberinto(List<Vertice> ordenVisita) {
@@ -33,8 +43,8 @@ public final class Despliegue {
         for (int paso = 0; paso < ordenVisita.size() && !saltar; paso++) {
             Vertice actual = ordenVisita.get(paso);
             visitados.add(actual.getId());
-            imprimir(renderizar(visitados, actual.getId(), Set.of(),
-                    "Paso " + (paso + 1) + " de " + ordenVisita.size()));
+            String titulo = "Paso " + (paso + 1) + " de " + ordenVisita.size();
+            imprimir(() -> renderizar(visitados, actual.getId(), Set.of(), titulo), true);
             if (manual) {
                 System.out.print("ENTER para avanzar; f para saltar al final: ");
                 if (!entrada.hasNextLine() || entrada.nextLine().strip().equalsIgnoreCase("f")) {
@@ -94,8 +104,12 @@ public final class Despliegue {
             titulo.append(nombre).append('\n');
         }
         titulo.append("Resultado final");
-        StringBuilder salida = new StringBuilder(renderizar(visitados, -1, camino,
-                titulo.toString()));
+        String tituloFinal = titulo.toString();
+        imprimir(() -> textoFinal(visitados, camino, tituloFinal), limpiar);
+    }
+
+    private String textoFinal(Set<Integer> visitados, Set<Integer> camino, String titulo) {
+        StringBuilder salida = new StringBuilder(renderizar(visitados, -1, camino, titulo));
         if (resultado.isEncontrado()) {
             salida.append("Longitud: ").append(resultado.getCamino().size() - 1)
                     .append(" movimientos\n");
@@ -105,7 +119,7 @@ public final class Despliegue {
         salida.append("Vertices visitados: ").append(resultado.getVisitados().size())
                 .append('\n').append("Tiempo: ").append(resultado.getTiempoNanos())
                 .append(" nanosegundos\n");
-        imprimir(salida.toString(), limpiar);
+        return salida.toString();
     }
 
     private String renderizar(Set<Integer> visitados, int actual, Set<Integer> camino,
@@ -113,35 +127,45 @@ public final class Despliegue {
         StringBuilder salida = new StringBuilder((laberinto.getColumnas() + 1)
                 * laberinto.getFilas() + 180);
         salida.append(titulo).append('\n');
+        for (String renglon : vista(visitados, actual, camino)) {
+            salida.append(renglon).append('\n');
+        }
+        salida.append(tema.leyenda()).append('\n');
+        return salida.toString();
+    }
+
+    // Devuelve solo las filas del laberinto para comprobar su tamaño sin la leyenda.
+    List<String> vista(Set<Integer> visitados, int actual, Set<Integer> camino) {
+        List<String> renglones = new ArrayList<>(laberinto.getFilas());
         for (int fila = 0; fila < laberinto.getFilas(); fila++) {
+            StringBuilder renglon = new StringBuilder(laberinto.getColumnas());
             for (int columna = 0; columna < laberinto.getColumnas(); columna++) {
                 int id = fila * laberinto.getColumnas() + columna;
-                char celda = matriz[fila][columna];
-                // Las capas se aplican sobre el caracter original.
+                char celda = tema.pared(matriz, fila, columna);
+                // Las capas solo cambian la vista.
                 if (laberinto.esTransitable(fila, columna)) {
-                    celda = ' ';
+                    celda = tema.transitable();
                 }
                 if (esEntrada(fila, columna)) {
-                    celda = 'E';
+                    celda = tema.entrada();
                 }
                 if (esSalida(fila, columna)) {
-                    celda = 'S';
+                    celda = tema.salida();
                 }
                 if (visitados.contains(id) && !esExtremo(fila, columna)) {
-                    celda = '.';
-                }
-                if (camino.contains(id) && !esExtremo(fila, columna)) {
-                    celda = '*';
+                    celda = tema.visitado();
                 }
                 if (id == actual) {
-                    celda = '@';
+                    celda = tema.actual();
                 }
-                salida.append(celda);
+                if (camino.contains(id) && !esExtremo(fila, columna)) {
+                    celda = tema.camino();
+                }
+                renglon.append(celda);
             }
-            salida.append('\n');
+            renglones.add(renglon.toString());
         }
-        salida.append(LEYENDA).append('\n');
-        return salida.toString();
+        return renglones;
     }
 
     private boolean esEntrada(int fila, int columna) {
@@ -158,11 +182,17 @@ public final class Despliegue {
         return esEntrada(fila, columna) || esSalida(fila, columna);
     }
 
-    private void imprimir(String texto) {
-        imprimir(texto, true);
+    private void imprimir(Supplier<String> texto, boolean limpiar) {
+        imprimirTexto(texto.get(), limpiar);
+        // PrintStream registra errores de escritura sin lanzar IOException.
+        if (tema == TemaConsola.UNICODE && System.out.checkError()) {
+            tema = TemaConsola.ASCII;
+            System.out.println("Aviso: fallo la salida Unicode; se usara ASCII.");
+            imprimirTexto(texto.get(), limpiar);
+        }
     }
 
-    private void imprimir(String texto, boolean limpiar) {
+    private void imprimirTexto(String texto, boolean limpiar) {
         if (!limpiar) {
             System.out.print("\n==============================\n" + texto);
         } else if (usarAnsi) {
