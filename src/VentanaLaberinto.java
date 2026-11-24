@@ -6,7 +6,11 @@ import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.GridBagLayout;
 import java.awt.GridLayout;
+import java.io.IOException;
+import java.net.URISyntaxException;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.HashSet;
 import java.util.List;
@@ -18,9 +22,12 @@ import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.JButton;
+import javax.swing.DefaultListCellRenderer;
+import javax.swing.DefaultListModel;
 import javax.swing.JFileChooser;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
+import javax.swing.JList;
 import javax.swing.JMenu;
 import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
@@ -33,6 +40,7 @@ import javax.swing.JSplitPane;
 import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
 import javax.swing.Timer;
+import javax.swing.ListSelectionModel;
 
 public final class VentanaLaberinto extends JFrame {
     private enum Algoritmo {
@@ -54,6 +62,7 @@ public final class VentanaLaberinto extends JFrame {
     private static final Color SECUNDARIO = new Color(179, 194, 211);
     private static final Font FUENTE = new Font(Font.SANS_SERIF, Font.PLAIN, 13);
     private static final Font FUENTE_TITULO = new Font(Font.SANS_SERIF, Font.BOLD, 16);
+    private static final String[] CARPETAS_EJEMPLOS = { "ejemplos", "MapaLaberintos" };
 
     private final EnumMap<Algoritmo, Resultado> resultados = new EnumMap<>(Algoritmo.class);
     private final PanelLaberinto panelPrincipal = new PanelLaberinto();
@@ -62,6 +71,14 @@ public final class VentanaLaberinto extends JFrame {
     private final JPanel centro = new JPanel(tarjetas);
     private final JPanel filaComparacion = new JPanel();
     private final JPanel resultadosPanel = new JPanel();
+    private final DefaultListModel<Path> modeloEjemplos = new DefaultListModel<>();
+    private final DefaultListModel<Path> modeloInvalidos = new DefaultListModel<>();
+    private final JList<Path> listaEjemplos = crearLista(modeloEjemplos);
+    private final JList<Path> listaInvalidos = crearLista(modeloInvalidos);
+    private final JPanel cuerpoEjemplos = new JPanel(new CardLayout());
+    private final JScrollPane scrollInvalidos = scrollLista(listaInvalidos);
+    private final JButton botonInvalidos = boton("Ejemplos inválidos ▸");
+    private final JLabel avisoEjemplos = etiqueta("No se encontró la carpeta de ejemplos", FUENTE);
     private final JLabel titulo = etiqueta("Carga un laberinto para comenzar", FUENTE_TITULO);
     private final JLabel estado = etiqueta("Carga un laberinto para comenzar", FUENTE);
     private final JProgressBar progreso = new JProgressBar();
@@ -79,6 +96,9 @@ public final class VentanaLaberinto extends JFrame {
 
     private Laberinto laberinto;
     private Grafo grafo;
+    private Path rutaCargada;
+    private Path rutaPendiente;
+    private boolean sincronizandoSeleccion;
     private SwingWorker<?, ?> trabajo;
     private long generacion;
     private boolean ocupado;
@@ -92,20 +112,21 @@ public final class VentanaLaberinto extends JFrame {
     public VentanaLaberinto() {
         super("LOSTMIND · Laberintos");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setMinimumSize(new Dimension(860, 580));
-        setSize(1180, 740);
+        setMinimumSize(new Dimension(1060, 580));
+        setSize(1380, 740);
         setLocationRelativeTo(null);
         getContentPane().setBackground(FONDO);
         setLayout(new BorderLayout());
         construirMenu();
         add(construirBarra(), BorderLayout.NORTH);
-        add(construirCentro(), BorderLayout.CENTER);
+        add(construirAreaTrabajo(), BorderLayout.CENTER);
         add(construirPie(), BorderLayout.SOUTH);
         reloj.setDelay(demora());
         zoom.addChangeListener(evento -> panelPrincipal.setTamanoCelda(zoom.getValue()));
         velocidad.addChangeListener(evento -> reloj.setDelay(demora()));
         actualizarResultados();
         actualizarControles();
+        actualizarLista();
     }
 
     private void construirMenu() {
@@ -150,6 +171,200 @@ public final class VentanaLaberinto extends JFrame {
         barra.add(separador());
         barra.add(salir);
         return barra;
+    }
+
+    private JPanel construirAreaTrabajo() {
+        JPanel area = new JPanel(new BorderLayout());
+        area.setBackground(FONDO);
+        area.add(construirPanelEjemplos(), BorderLayout.WEST);
+        area.add(construirCentro(), BorderLayout.CENTER);
+        return area;
+    }
+
+    private JPanel construirPanelEjemplos() {
+        JPanel lateral = new JPanel(new BorderLayout(0, 10));
+        lateral.setBackground(SUPERFICIE);
+        lateral.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(0, 0, 0, 1, TARJETA),
+                BorderFactory.createEmptyBorder(12, 10, 12, 10)));
+        lateral.setPreferredSize(new Dimension(210, 400));
+        lateral.setMinimumSize(new Dimension(210, 200));
+        lateral.add(etiqueta("Laberintos", FUENTE_TITULO), BorderLayout.NORTH);
+
+        listaEjemplos.addListSelectionListener(evento -> seleccionarEjemplo(
+                evento.getValueIsAdjusting(), listaEjemplos));
+        listaInvalidos.addListSelectionListener(evento -> seleccionarEjemplo(
+                evento.getValueIsAdjusting(), listaInvalidos));
+        JPanel listas = new JPanel(new BorderLayout(0, 8));
+        listas.setBackground(SUPERFICIE);
+        listas.add(scrollLista(listaEjemplos), BorderLayout.CENTER);
+        JPanel seccionInvalidos = new JPanel(new BorderLayout(0, 5));
+        seccionInvalidos.setBackground(SUPERFICIE);
+        botonInvalidos.setHorizontalAlignment(JButton.LEFT);
+        botonInvalidos.addActionListener(evento -> {
+            boolean abrir = !scrollInvalidos.isVisible();
+            scrollInvalidos.setVisible(abrir);
+            botonInvalidos.setText(abrir ? "Ejemplos inválidos ▾" : "Ejemplos inválidos ▸");
+            seccionInvalidos.revalidate();
+        });
+        seccionInvalidos.add(botonInvalidos, BorderLayout.NORTH);
+        scrollInvalidos.setPreferredSize(new Dimension(180, 140));
+        scrollInvalidos.setVisible(false);
+        seccionInvalidos.add(scrollInvalidos, BorderLayout.CENTER);
+        listas.add(seccionInvalidos, BorderLayout.SOUTH);
+        cuerpoEjemplos.add(listas, "listas");
+        JPanel sinCarpeta = new JPanel(new BorderLayout());
+        sinCarpeta.setBackground(SUPERFICIE);
+        avisoEjemplos.setForeground(SECUNDARIO);
+        sinCarpeta.add(avisoEjemplos, BorderLayout.NORTH);
+        cuerpoEjemplos.add(sinCarpeta, "aviso");
+        lateral.add(cuerpoEjemplos, BorderLayout.CENTER);
+
+        JButton actualizar = boton("Actualizar lista");
+        actualizar.addActionListener(evento -> actualizarLista());
+        lateral.add(actualizar, BorderLayout.SOUTH);
+        return lateral;
+    }
+
+    private void actualizarLista() {
+        Path carpeta = buscarCarpetaEjemplos();
+        sincronizandoSeleccion = true;
+        try {
+            modeloEjemplos.clear();
+            modeloInvalidos.clear();
+            if (carpeta == null) {
+                avisoEjemplos.setText("<html><body style='width:170px'>"
+                        + "No se encontró la carpeta de ejemplos</body></html>");
+                ((CardLayout) cuerpoEjemplos.getLayout()).show(cuerpoEjemplos, "aviso");
+                botonInvalidos.setVisible(false);
+                return;
+            }
+            for (Path archivo : archivosTxt(carpeta)) modeloEjemplos.addElement(archivo);
+            Path carpetaInvalidos = carpeta.resolve("invalidos");
+            if (Files.isDirectory(carpetaInvalidos)) {
+                for (Path archivo : archivosTxt(carpetaInvalidos)) {
+                    modeloInvalidos.addElement(archivo);
+                }
+            }
+            botonInvalidos.setVisible(Files.isDirectory(carpetaInvalidos));
+            ((CardLayout) cuerpoEjemplos.getLayout()).show(cuerpoEjemplos, "listas");
+        } catch (IOException error) {
+            modeloEjemplos.clear();
+            modeloInvalidos.clear();
+            avisoEjemplos.setText("<html><body style='width:170px'>"
+                    + "No se pudo leer la carpeta de ejemplos</body></html>");
+            ((CardLayout) cuerpoEjemplos.getLayout()).show(cuerpoEjemplos, "aviso");
+            estado.setText("No se pudo actualizar la lista de ejemplos.");
+        } finally {
+            sincronizandoSeleccion = false;
+            sincronizarSeleccion();
+        }
+    }
+
+    private static Path buscarCarpetaEjemplos() {
+        for (String nombre : CARPETAS_EJEMPLOS) {
+            Path candidata = Path.of(nombre);
+            if (Files.isDirectory(candidata)) return candidata;
+        }
+        try {
+            Path clases = Path.of(VentanaLaberinto.class.getProtectionDomain()
+                    .getCodeSource().getLocation().toURI());
+            Path padre = clases.getParent();
+            if (padre != null) {
+                Path candidata = padre.resolve(CARPETAS_EJEMPLOS[0]);
+                if (Files.isDirectory(candidata)) return candidata;
+            }
+        } catch (URISyntaxException | RuntimeException error) {
+            // La carpeta relativa sigue disponible si existe.
+        }
+        return null;
+    }
+
+    private static List<Path> archivosTxt(Path carpeta) throws IOException {
+        try (var archivos = Files.list(carpeta)) {
+            return archivos.filter(Files::isRegularFile)
+                    .filter(ruta -> ruta.getFileName().toString()
+                            .toLowerCase(Locale.ROOT).endsWith(".txt"))
+                    .sorted(Comparator.comparing(ruta -> ruta.getFileName().toString(),
+                            VentanaLaberinto::compararNatural))
+                    .toList();
+        }
+    }
+
+    private static int compararNatural(String izquierda, String derecha) {
+        int a = 0;
+        int b = 0;
+        while (a < izquierda.length() && b < derecha.length()) {
+            char x = izquierda.charAt(a);
+            char y = derecha.charAt(b);
+            if (Character.isDigit(x) && Character.isDigit(y)) {
+                int inicioA = a;
+                int inicioB = b;
+                while (a < izquierda.length() && Character.isDigit(izquierda.charAt(a))) a++;
+                while (b < derecha.length() && Character.isDigit(derecha.charAt(b))) b++;
+                int digitosA = inicioA;
+                int digitosB = inicioB;
+                while (digitosA < a - 1 && izquierda.charAt(digitosA) == '0') digitosA++;
+                while (digitosB < b - 1 && derecha.charAt(digitosB) == '0') digitosB++;
+                int largo = Integer.compare(a - digitosA, b - digitosB);
+                if (largo != 0) return largo;
+                for (int indice = 0; indice < a - digitosA; indice++) {
+                    int diferencia = izquierda.charAt(digitosA + indice)
+                            - derecha.charAt(digitosB + indice);
+                    if (diferencia != 0) return diferencia;
+                }
+                int ceros = Integer.compare(a - inicioA, b - inicioB);
+                if (ceros != 0) return ceros;
+            } else {
+                int diferencia = Character.compare(Character.toLowerCase(x),
+                        Character.toLowerCase(y));
+                if (diferencia != 0) return diferencia;
+                a++;
+                b++;
+            }
+        }
+        int largo = Integer.compare(izquierda.length() - a, derecha.length() - b);
+        return largo != 0 ? largo : izquierda.compareTo(derecha);
+    }
+
+    private void seleccionarEjemplo(boolean ajustando, JList<Path> lista) {
+        if (ajustando || sincronizandoSeleccion) return;
+        Path ruta = lista.getSelectedValue();
+        if (ruta == null) return;
+        if (normalizar(ruta).equals(rutaPendiente)) return;
+        if (rutaCargada != null && normalizar(ruta).equals(rutaCargada) && !ocupado) return;
+        cargarRuta(ruta);
+        sincronizarSeleccion();
+    }
+
+    private void sincronizarSeleccion() {
+        sincronizandoSeleccion = true;
+        try {
+            seleccionarRuta(modeloEjemplos, listaEjemplos);
+            seleccionarRuta(modeloInvalidos, listaInvalidos);
+        } finally {
+            sincronizandoSeleccion = false;
+        }
+    }
+
+    private void seleccionarRuta(DefaultListModel<Path> modelo, JList<Path> lista) {
+        int indice = -1;
+        for (int i = 0; i < modelo.size(); i++) {
+            if (rutaCargada != null && normalizar(modelo.get(i)).equals(rutaCargada)) {
+                indice = i;
+                break;
+            }
+        }
+        lista.setSelectedIndex(indice);
+        if (indice >= 0) lista.ensureIndexIsVisible(indice);
+    }
+
+    private static Path normalizar(Path ruta) {
+        try {
+            return ruta.toRealPath();
+        } catch (IOException error) {
+            return ruta.toAbsolutePath().normalize();
+        }
     }
 
     private JSplitPane construirCentro() {
@@ -290,9 +505,13 @@ public final class VentanaLaberinto extends JFrame {
     private void cargar() {
         JFileChooser selector = new JFileChooser(Path.of(".").toAbsolutePath().toFile());
         if (selector.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) return;
-        Path ruta = selector.getSelectedFile().toPath();
+        cargarRuta(selector.getSelectedFile().toPath());
+    }
+
+    private void cargarRuta(Path ruta) {
         cancelarTrabajo();
         detenerAnimacion();
+        rutaPendiente = normalizar(ruta);
         ocupado = true;
         actualizarControles();
         estado.setText("Cargando " + ruta.getFileName() + "...");
@@ -312,6 +531,7 @@ public final class VentanaLaberinto extends JFrame {
                     Carga carga = get();
                     laberinto = carga.laberinto();
                     grafo = carga.grafo();
+                    rutaCargada = normalizar(ruta);
                     resultados.clear();
                     panelPrincipal.setLaberinto(laberinto);
                     panelPrincipal.setEstado(Set.of(), -1, Set.of());
@@ -330,6 +550,8 @@ public final class VentanaLaberinto extends JFrame {
                 } catch (ExecutionException | CancellationException error) {
                     mostrarError(error);
                 }
+                rutaPendiente = null;
+                sincronizarSeleccion();
                 actualizarResultados();
                 actualizarControles();
             }
@@ -695,6 +917,40 @@ public final class VentanaLaberinto extends JFrame {
         slider.setBackground(SUPERFICIE);
         slider.setPreferredSize(new Dimension(100, 28));
         return slider;
+    }
+
+    private static JList<Path> crearLista(DefaultListModel<Path> modelo) {
+        JList<Path> lista = new JList<>(modelo);
+        lista.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        lista.setFixedCellHeight(28);
+        lista.setFont(FUENTE);
+        lista.setBackground(SUPERFICIE);
+        lista.setForeground(TEXTO);
+        lista.setCellRenderer(new DefaultListCellRenderer() {
+            @Override
+            public java.awt.Component getListCellRendererComponent(JList<?> origen,
+                    Object valor, int indice, boolean seleccionado, boolean foco) {
+                JLabel celda = (JLabel) super.getListCellRendererComponent(origen, valor,
+                        indice, seleccionado, foco);
+                if (valor instanceof Path ruta) {
+                    String nombre = ruta.getFileName().toString();
+                    celda.setText(nombre.substring(0, nombre.length() - 4));
+                }
+                celda.setFont(FUENTE);
+                celda.setForeground(TEXTO);
+                celda.setBackground(seleccionado ? new Color(76, 108, 145) : SUPERFICIE);
+                celda.setBorder(BorderFactory.createEmptyBorder(3, 8, 3, 4));
+                return celda;
+            }
+        });
+        return lista;
+    }
+
+    private static JScrollPane scrollLista(JList<Path> lista) {
+        JScrollPane scroll = new JScrollPane(lista);
+        scroll.getViewport().setBackground(SUPERFICIE);
+        scroll.setBorder(BorderFactory.createLineBorder(TARJETA));
+        return scroll;
     }
 
     private static JLabel separador() {

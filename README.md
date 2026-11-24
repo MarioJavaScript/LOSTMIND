@@ -99,6 +99,12 @@ java -cp src MainSwing
 En Linux o macOS, cambia `src\*.java` por `src/*.java`. El botón **Cargar
 laberinto** o el menú **Archivo > Cargar laberinto** abre un selector de archivos.
 Si el archivo es inválido, se muestra el motivo y se conserva el laberinto anterior.
+El panel izquierdo **Laberintos** carga ejemplos con un clic; **Actualizar lista**
+vuelve a leer la carpeta y **Ejemplos inválidos** despliega archivos para probar
+los mensajes de error. Busca primero `ejemplos/`, luego `MapaLaberintos/` desde
+el directorio de ejecución y, por último, `ejemplos/` en el directorio padre
+del que contiene las clases compiladas. Para cambiar los nombres candidatos, edita la constante
+`CARPETAS_EJEMPLOS` en `VentanaLaberinto.java`.
 Los botones **DFS**, **BFS** y **Dijkstra** calculan y animan la exploración;
 **Comparar los tres** abre tres tarjetas con los resultados completos y calcula
 solo los que falten. **Volver** regresa a la vista principal. **Tiempos** muestra
