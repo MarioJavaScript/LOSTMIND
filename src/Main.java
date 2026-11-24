@@ -1,3 +1,9 @@
+import java.io.IOException;
+import java.io.PrintStream;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Scanner;
 
@@ -7,9 +13,24 @@ public final class Main {
     private final Scanner entrada = new Scanner(System.in);
     private Laberinto laberinto;
     private Grafo grafo;
+    private TemaConsola tema = TemaConsola.ASCII;
 
     public static void main(String[] args) {
-        new Main().ejecutar();
+        System.setOut(new PrintStream(System.out, true, StandardCharsets.UTF_8));
+        Main programa = new Main();
+        if (List.of(args).contains("--unicode")) {
+            programa.tema = TemaConsola.UNICODE;
+        } else {
+            programa.elegirTema();
+        }
+        programa.ejecutar();
+    }
+
+    private void elegirTema() {
+        System.out.print("Estilo de símbolos: 1) ASCII  2) Unicode (ENTER = ASCII)\nOpcion: ");
+        if (entrada.hasNextLine() && entrada.nextLine().strip().equals("2")) {
+            tema = TemaConsola.UNICODE;
+        }
     }
 
     private void ejecutar() {
@@ -46,11 +67,17 @@ public final class Main {
     }
 
     private void cargar() {
-        System.out.print("Ruta del archivo: ");
+        System.out.print("Ruta del archivo (ENTER vacio para elegir un ejemplo): ");
         if (!entrada.hasNextLine()) {
             return;
         }
         String ruta = entrada.nextLine();
+        if (ruta.isEmpty()) {
+            ruta = elegirEjemplo();
+            if (ruta == null) {
+                return;
+            }
+        }
         // "Copiar como ruta" de Windows agrega comillas en los extremos; se quitan (sin trim).
         if (ruta.length() >= 2 && ruta.startsWith("\"") && ruta.endsWith("\"")) {
             ruta = ruta.substring(1, ruta.length() - 1);
@@ -67,6 +94,41 @@ public final class Main {
         }
     }
 
+    // Lista los .txt de ejemplos/ (y ejemplos/invalidos/) y devuelve la ruta elegida.
+    private String elegirEjemplo() {
+        List<Path> archivos;
+        try (var flujo = Files.walk(Path.of("ejemplos"), 2)) {
+            archivos = flujo.filter(Files::isRegularFile)
+                    .filter(ruta -> ruta.getFileName().toString().endsWith(".txt"))
+                    .sorted(Comparator.comparing(Path::toString))
+                    .toList();
+        } catch (IOException | RuntimeException excepcion) {
+            System.out.println("No se pudo leer la carpeta ejemplos: " + excepcion.getMessage());
+            return null;
+        }
+        if (archivos.isEmpty()) {
+            System.out.println("No hay ejemplos en la carpeta ejemplos.");
+            return null;
+        }
+        for (int indice = 0; indice < archivos.size(); indice++) {
+            System.out.println((indice + 1) + ") " + archivos.get(indice).toString().replace(java.io.File.separatorChar, '/'));
+        }
+        System.out.print("Numero de ejemplo: ");
+        if (!entrada.hasNextLine()) {
+            return null;
+        }
+        try {
+            int numero = Integer.parseInt(entrada.nextLine().strip());
+            if (numero >= 1 && numero <= archivos.size()) {
+                return archivos.get(numero - 1).toString();
+            }
+        } catch (NumberFormatException excepcion) {
+            // Se informa abajo.
+        }
+        System.out.println("Ejemplo invalido; no se cargo nada.");
+        return null;
+    }
+
     private void resolver(Algoritmo algoritmo) {
         if (!hayLaberinto()) {
             return;
@@ -77,7 +139,9 @@ public final class Main {
             case DIJKSTRA -> grafo.caminoMasCorto();
         };
         Resultado resultado = resultado(algoritmo);
-        new Despliegue(laberinto, resultado, entrada).despliegaLaberinto(visitados);
+        Despliegue despliegue = new Despliegue(laberinto, resultado, entrada, tema);
+        despliegue.despliegaLaberinto(visitados);
+        tema = despliegue.getTema();
     }
 
     private void mostrarTodas() {
@@ -92,9 +156,10 @@ public final class Main {
                     case DIJKSTRA -> grafo.caminoMasCorto();
                 }
             }
-            new Despliegue(laberinto, resultado(algoritmo), entrada)
-                    .mostrarFinal(algoritmo == Algoritmo.DIJKSTRA
-                            ? "Dijkstra" : algoritmo.name(), false);
+            Despliegue despliegue = new Despliegue(laberinto, resultado(algoritmo), entrada, tema);
+            despliegue.mostrarFinal(algoritmo == Algoritmo.DIJKSTRA
+                    ? "Dijkstra" : algoritmo.name(), false);
+            tema = despliegue.getTema();
         }
     }
 

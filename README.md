@@ -21,6 +21,8 @@ javac -encoding UTF-8 src\*.java
 java -cp src Main
 ```
 
+Para iniciar directamente con símbolos Unicode, usa `java -cp src Main --unicode`.
+
 En Linux o macOS:
 
 ```sh
@@ -28,7 +30,7 @@ javac -encoding UTF-8 src/*.java
 java -cp src Main
 ```
 
-Cuando el menú pida una ruta, se puede escribir, por ejemplo, `ejemplos/con_marcas.txt`. Las rutas relativas se interpretan desde el directorio donde se ejecuta Java.
+Si en la opción 1 se deja la ruta vacía (ENTER), el programa lista los archivos de `ejemplos/` y permite elegir uno por número. Cuando el menú pida una ruta, se puede escribir, por ejemplo, `ejemplos/con_marcas.txt`. Las rutas relativas se interpretan desde el directorio donde se ejecuta Java.
 
 ## Formato de los laberintos
 
@@ -55,7 +57,34 @@ Si hay marcas, debe existir exactamente una `E` (entrada) y una `S` (salida). Si
 5. Mostrar las tres soluciones.
 6. Salir.
 
-En la animación, pulsa **ENTER** para avanzar paso a paso, escribe un número para pausar esa cantidad de milisegundos entre pasos, (de 0 a 5000; fuera de rango se avisa y se vuelve a pedir) o `f` para saltar al resultado final. La leyenda es: `+ - |` pared original, espacio transitable, `E` entrada, `S` salida, `.` visitado, `@` vértice actual y `*` camino final. Los extremos conservan `E` y `S` en la vista final. Si no hay solución, se muestra la exploración y se informa que no existe camino, sin presentar una longitud.
+En la animación, pulsa **ENTER** para avanzar paso a paso, escribe un número para pausar esa cantidad de milisegundos entre pasos, (de 0 a 5000; fuera de rango se avisa y se vuelve a pedir) o `f` para saltar al resultado final. Con ASCII, la leyenda es: `+ - |` pared original, espacio transitable, `E` entrada, `S` salida, `.` visitado, `@` vértice actual y `*` camino final. Los extremos conservan sus símbolos en la vista final. Si no hay solución, se muestra la exploración y se informa que no existe camino, sin presentar una longitud.
+
+## Caracteres alternativos
+
+Al iniciar, el programa pregunta `Estilo de símbolos: 1) ASCII  2) Unicode (ENTER = ASCII)`.
+Pulsa ENTER o escribe `1` para ASCII (predeterminado), o `2` para Unicode. El argumento
+`--unicode` selecciona Unicode sin mostrar la pregunta. Las seis opciones del menú
+siguen siendo las mismas.
+
+| Elemento | ASCII | Unicode |
+| --- | --- | --- |
+| Pared | `+ - \|` | `─ │ ┌ ┐ └ ┘ ├ ┤ ┬ ┴ ┼` |
+| Transitable | espacio | espacio |
+| Entrada | `E` | `▶` |
+| Salida | `S` | `◆` |
+| Visitado | `.` | `·` |
+| Vértice actual | `@` | `◉` |
+| Camino final | `*` | `●` |
+
+En Unicode, cada `+` se convierte en una esquina, unión o cruce según las paredes
+vecinas. Cada celda sigue ocupando una posición; el archivo de entrada conserva
+los caracteres ASCII originales y el grafo no cambia. En la vista final, entrada
+y salida conservan sus símbolos. Si falla la salida Unicode, el programa avisa y
+vuelve a ASCII.
+
+En Windows, la terminal debe soportar UTF-8 y usar una fuente compatible con
+estos símbolos. Antes de ejecutar, puedes escribir `chcp 65001` en la terminal.
+Java configura la salida estándar con UTF-8.
 
 ## Representación y algoritmos
 
@@ -70,9 +99,10 @@ Después de compilar con el comando anterior:
 ```powershell
 java -cp src PruebaCarga
 java -cp src PruebaAlgoritmos
+java -cp src PruebaTema
 ```
 
-Los mismos comandos `java` funcionan en Linux y macOS. `PruebaCarga` verifica ejemplos válidos e inválidos; `PruebaAlgoritmos` comprueba los caminos, sus movimientos y la coincidencia de longitud entre BFS y Dijkstra.
+Los mismos comandos `java` funcionan en Linux y macOS. `PruebaCarga` verifica ejemplos válidos e inválidos; `PruebaAlgoritmos` comprueba los caminos, sus movimientos y la coincidencia de longitud entre BFS y Dijkstra. `PruebaTema` comprueba dimensiones, paredes, posiciones transitables y esquinas en ambos temas.
 
 ## Responsabilidades
 
