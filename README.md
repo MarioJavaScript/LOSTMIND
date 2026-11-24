@@ -100,15 +100,16 @@ En Linux o macOS, cambia `src\*.java` por `src/*.java`. El botón **Cargar
 laberinto** o el menú **Archivo > Cargar laberinto** abre un selector de archivos.
 Si el archivo es inválido, se muestra el motivo y se conserva el laberinto anterior.
 Los botones **DFS**, **BFS** y **Dijkstra** calculan y animan la exploración;
-**Tres soluciones** muestra los resultados completos en pestañas y calcula solo
-los que falten. **Tiempos** muestra los tiempos de búsqueda y reconstrucción en
-nanosegundos.
+**Comparar los tres** abre tres tarjetas con los resultados completos y calcula
+solo los que falten. **Volver** regresa a la vista principal. **Tiempos** muestra
+los tiempos de búsqueda y reconstrucción en nanosegundos y milisegundos.
 
 Durante la animación puedes usar **Pausar/Continuar**, **Siguiente paso**, el
 control de **Velocidad** o **Saltar al final**. El control **Zoom** cambia el tamaño
-de las celdas; las barras de desplazamiento permiten recorrer laberintos grandes.
-La leyenda lateral explica los colores de cada capa. **Salir** o el cierre de la
-ventana termina la aplicación.
+de las celdas y **Ajustar** recupera el tamaño que cabe en el área visible, con
+un mínimo de 24 píxeles por celda. Las barras de desplazamiento permiten recorrer
+laberintos grandes. La leyenda bajo el laberinto explica los colores de cada capa.
+**Salir** o el cierre de la ventana termina la aplicación.
 
 ## Representación y algoritmos
 

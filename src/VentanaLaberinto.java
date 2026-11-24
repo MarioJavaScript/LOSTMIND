@@ -1,18 +1,22 @@
 import java.awt.BorderLayout;
+import java.awt.CardLayout;
 import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
+import java.awt.GridBagLayout;
 import java.awt.GridLayout;
 import java.nio.file.Path;
 import java.util.EnumMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
+import java.util.Locale;
 import java.util.Set;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
 import javax.swing.BorderFactory;
+import javax.swing.Box;
+import javax.swing.BoxLayout;
 import javax.swing.JButton;
 import javax.swing.JFileChooser;
 import javax.swing.JFrame;
@@ -22,15 +26,13 @@ import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
+import javax.swing.JProgressBar;
 import javax.swing.JScrollPane;
 import javax.swing.JSlider;
 import javax.swing.JSplitPane;
-import javax.swing.JTabbedPane;
-import javax.swing.JTextArea;
-import javax.swing.JToolBar;
+import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
 import javax.swing.Timer;
-import javax.swing.border.TitledBorder;
 
 public final class VentanaLaberinto extends JFrame {
     private enum Algoritmo {
@@ -45,23 +47,34 @@ public final class VentanaLaberinto extends JFrame {
 
     private record Carga(Laberinto laberinto, Grafo grafo) { }
 
-    private static final Color SUPERFICIE = new Color(31, 38, 50);
-    private static final Color TEXTO = new Color(230, 236, 245);
+    private static final Color FONDO = PanelLaberinto.FONDO;
+    private static final Color SUPERFICIE = new Color(30, 40, 55);
+    private static final Color TARJETA = new Color(39, 52, 70);
+    private static final Color TEXTO = new Color(238, 242, 247);
+    private static final Color SECUNDARIO = new Color(179, 194, 211);
+    private static final Font FUENTE = new Font(Font.SANS_SERIF, Font.PLAIN, 13);
+    private static final Font FUENTE_TITULO = new Font(Font.SANS_SERIF, Font.BOLD, 16);
+
     private final EnumMap<Algoritmo, Resultado> resultados = new EnumMap<>(Algoritmo.class);
-    private final EnumMap<Algoritmo, PanelLaberinto> paneles = new EnumMap<>(Algoritmo.class);
     private final PanelLaberinto panelPrincipal = new PanelLaberinto();
-    private final JTabbedPane vistas = new JTabbedPane();
-    private final JTextArea informacion = new JTextArea();
-    private final JLabel estado = new JLabel("Carga un laberinto para comenzar.");
+    private final JScrollPane scrollPrincipal = scroll(panelPrincipal);
+    private final CardLayout tarjetas = new CardLayout();
+    private final JPanel centro = new JPanel(tarjetas);
+    private final JPanel filaComparacion = new JPanel();
+    private final JPanel resultadosPanel = new JPanel();
+    private final JLabel titulo = etiqueta("Carga un laberinto para comenzar", FUENTE_TITULO);
+    private final JLabel estado = etiqueta("Carga un laberinto para comenzar", FUENTE);
+    private final JProgressBar progreso = new JProgressBar();
     private final JButton botonDFS = boton("DFS");
     private final JButton botonBFS = boton("BFS");
     private final JButton botonDijkstra = boton("Dijkstra");
-    private final JButton botonTres = boton("Tres soluciones");
+    private final JButton botonComparar = boton("Comparar los tres");
     private final JButton botonPausa = boton("Pausar");
     private final JButton botonPaso = boton("Siguiente paso");
     private final JButton botonFinal = boton("Saltar al final");
-    private final JSlider zoom = new JSlider(12, 48, 24);
-    private final JSlider velocidad = new JSlider(1, 100, 65);
+    private final JButton botonAjustar = boton("Ajustar");
+    private final JSlider zoom = slider(24, 64, 24);
+    private final JSlider velocidad = slider(1, 100, 65);
     private final Timer reloj = new Timer(0, evento -> siguientePaso());
 
     private Laberinto laberinto;
@@ -79,20 +92,20 @@ public final class VentanaLaberinto extends JFrame {
     public VentanaLaberinto() {
         super("LOSTMIND · Laberintos");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setMinimumSize(new Dimension(820, 540));
-        setSize(1120, 720);
+        setMinimumSize(new Dimension(860, 580));
+        setSize(1180, 740);
         setLocationRelativeTo(null);
-        getContentPane().setBackground(PanelLaberinto.FONDO);
-        setLayout(new BorderLayout(0, 0));
+        getContentPane().setBackground(FONDO);
+        setLayout(new BorderLayout());
         construirMenu();
         add(construirBarra(), BorderLayout.NORTH);
         add(construirCentro(), BorderLayout.CENTER);
-        add(construirControles(), BorderLayout.SOUTH);
+        add(construirPie(), BorderLayout.SOUTH);
         reloj.setDelay(demora());
-        zoom.addChangeListener(evento -> ajustarZoom());
+        zoom.addChangeListener(evento -> panelPrincipal.setTamanoCelda(zoom.getValue()));
         velocidad.addChangeListener(evento -> reloj.setDelay(demora()));
+        actualizarResultados();
         actualizarControles();
-        actualizarInformacion();
     }
 
     private void construirMenu() {
@@ -100,6 +113,7 @@ public final class VentanaLaberinto extends JFrame {
         barra.setBackground(SUPERFICIE);
         JMenu archivo = new JMenu("Archivo");
         archivo.setForeground(TEXTO);
+        archivo.setFont(FUENTE);
         JMenuItem cargar = new JMenuItem("Cargar laberinto...");
         cargar.addActionListener(evento -> cargar());
         JMenuItem salir = new JMenuItem("Salir");
@@ -111,69 +125,101 @@ public final class VentanaLaberinto extends JFrame {
         setJMenuBar(barra);
     }
 
-    private JToolBar construirBarra() {
-        JToolBar barra = new JToolBar();
-        barra.setFloatable(false);
+    private JPanel construirBarra() {
+        JPanel barra = new JPanel(new FlowLayout(FlowLayout.LEFT, 9, 9));
         barra.setBackground(SUPERFICIE);
-        barra.setBorder(BorderFactory.createEmptyBorder(9, 10, 9, 10));
-        JButton botonCargar = boton("Cargar laberinto");
-        botonCargar.addActionListener(evento -> cargar());
+        JButton cargar = boton("Cargar laberinto");
+        cargar.addActionListener(evento -> cargar());
         botonDFS.addActionListener(evento -> resolver(Algoritmo.DFS));
         botonBFS.addActionListener(evento -> resolver(Algoritmo.BFS));
         botonDijkstra.addActionListener(evento -> resolver(Algoritmo.DIJKSTRA));
-        botonTres.addActionListener(evento -> mostrarTres());
-        JButton botonTiempos = boton("Tiempos");
-        botonTiempos.addActionListener(evento -> mostrarTiempos());
-        JButton botonSalir = boton("Salir");
-        botonSalir.addActionListener(evento -> dispose());
-        for (JButton boton : new JButton[] { botonCargar, botonDFS, botonBFS,
-                botonDijkstra, botonTres, botonTiempos, botonSalir }) {
-            barra.add(boton);
-            barra.addSeparator(new Dimension(5, 0));
-        }
+        botonComparar.addActionListener(evento -> mostrarTres());
+        JButton tiempos = boton("Tiempos");
+        tiempos.addActionListener(evento -> mostrarTiempos());
+        JButton salir = boton("Salir");
+        salir.addActionListener(evento -> dispose());
+        barra.add(cargar);
+        barra.add(separador());
+        barra.add(etiqueta("Resolver:", FUENTE));
+        barra.add(botonDFS);
+        barra.add(botonBFS);
+        barra.add(botonDijkstra);
+        barra.add(separador());
+        barra.add(botonComparar);
+        barra.add(tiempos);
+        barra.add(separador());
+        barra.add(salir);
         return barra;
     }
 
     private JSplitPane construirCentro() {
-        vistas.addTab("Exploración", crearScroll(panelPrincipal));
-        vistas.setBackground(SUPERFICIE);
-        vistas.setForeground(TEXTO);
+        centro.setBackground(FONDO);
+        centro.add(construirVacio(), "vacio");
+        centro.add(construirPrincipal(), "principal");
+        centro.add(construirComparacion(), "comparacion");
+        tarjetas.show(centro, "vacio");
 
-        JPanel lateral = new JPanel(new BorderLayout(0, 16));
-        lateral.setBackground(SUPERFICIE);
-        lateral.setBorder(BorderFactory.createEmptyBorder(18, 14, 18, 14));
-        lateral.setPreferredSize(new Dimension(270, 400));
-        JLabel titulo = new JLabel("RESULTADOS");
-        titulo.setForeground(TEXTO);
-        titulo.setFont(titulo.getFont().deriveFont(Font.BOLD, 15f));
-        lateral.add(titulo, BorderLayout.NORTH);
-        informacion.setEditable(false);
-        informacion.setBackground(SUPERFICIE);
-        informacion.setForeground(TEXTO);
-        informacion.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
-        informacion.setLineWrap(true);
-        informacion.setWrapStyleWord(true);
-        lateral.add(informacion, BorderLayout.CENTER);
-        lateral.add(construirLeyenda(), BorderLayout.SOUTH);
-
-        JSplitPane division = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, vistas, lateral);
+        resultadosPanel.setLayout(new BoxLayout(resultadosPanel, BoxLayout.Y_AXIS));
+        resultadosPanel.setBackground(SUPERFICIE);
+        JScrollPane lateral = new JScrollPane(resultadosPanel);
+        lateral.getViewport().setBackground(SUPERFICIE);
+        lateral.setBorder(BorderFactory.createEmptyBorder());
+        lateral.setPreferredSize(new Dimension(290, 400));
+        lateral.setMinimumSize(new Dimension(270, 200));
+        JSplitPane division = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, centro, lateral);
         division.setResizeWeight(1.0);
-        division.setDividerLocation(810);
+        division.setDividerLocation(870);
         division.setBorder(null);
         return division;
     }
 
+    private JPanel construirVacio() {
+        JPanel vacio = new JPanel(new GridBagLayout());
+        vacio.setBackground(FONDO);
+        JPanel contenido = new JPanel();
+        contenido.setLayout(new BoxLayout(contenido, BoxLayout.Y_AXIS));
+        contenido.setBackground(FONDO);
+        JLabel mensaje = etiqueta("Carga un laberinto para comenzar",
+                new Font(Font.SANS_SERIF, Font.BOLD, 24));
+        mensaje.setAlignmentX(CENTER_ALIGNMENT);
+        JButton cargar = boton("Cargar laberinto");
+        cargar.setAlignmentX(CENTER_ALIGNMENT);
+        cargar.addActionListener(evento -> cargar());
+        contenido.add(mensaje);
+        contenido.add(Box.createVerticalStrut(20));
+        contenido.add(cargar);
+        vacio.add(contenido);
+        return vacio;
+    }
+
+    private JPanel construirPrincipal() {
+        JPanel principal = new JPanel(new BorderLayout(0, 8));
+        principal.setBackground(FONDO);
+        JPanel encabezado = new JPanel(new BorderLayout(0, 6));
+        encabezado.setBackground(SUPERFICIE);
+        encabezado.setBorder(BorderFactory.createEmptyBorder(12, 16, 10, 16));
+        encabezado.add(titulo, BorderLayout.NORTH);
+        progreso.setStringPainted(true);
+        progreso.setString("0 / 0");
+        progreso.setFont(FUENTE);
+        encabezado.add(progreso, BorderLayout.SOUTH);
+        principal.add(encabezado, BorderLayout.NORTH);
+        principal.add(scrollPrincipal, BorderLayout.CENTER);
+        JPanel inferior = new JPanel(new BorderLayout());
+        inferior.setBackground(SUPERFICIE);
+        inferior.add(construirLeyenda(), BorderLayout.NORTH);
+        inferior.add(construirControles(), BorderLayout.SOUTH);
+        principal.add(inferior, BorderLayout.SOUTH);
+        return principal;
+    }
+
     private JPanel construirLeyenda() {
-        JPanel leyenda = new JPanel(new GridLayout(0, 2, 8, 8));
+        JPanel leyenda = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 7));
         leyenda.setBackground(SUPERFICIE);
-        TitledBorder borde = BorderFactory.createTitledBorder(
-                BorderFactory.createLineBorder(new Color(70, 82, 101)), "Leyenda");
-        borde.setTitleColor(TEXTO);
-        leyenda.setBorder(borde);
         agregarClave(leyenda, "Pared", PanelLaberinto.PARED);
         agregarClave(leyenda, "Transitable", PanelLaberinto.TRANSITABLE);
-        agregarClave(leyenda, "Entrada", PanelLaberinto.ENTRADA);
-        agregarClave(leyenda, "Salida", PanelLaberinto.SALIDA);
+        agregarClave(leyenda, "Entrada E", PanelLaberinto.ENTRADA);
+        agregarClave(leyenda, "Salida S", PanelLaberinto.SALIDA);
         agregarClave(leyenda, "Visitado", PanelLaberinto.VISITADO);
         agregarClave(leyenda, "Actual", PanelLaberinto.ACTUAL);
         agregarClave(leyenda, "Camino final", PanelLaberinto.CAMINO);
@@ -181,20 +227,18 @@ public final class VentanaLaberinto extends JFrame {
     }
 
     private void agregarClave(JPanel leyenda, String nombre, Color color) {
+        JPanel item = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+        item.setBackground(SUPERFICIE);
         JLabel muestra = new JLabel("■");
         muestra.setForeground(color);
-        muestra.setFont(muestra.getFont().deriveFont(17f));
-        JLabel texto = new JLabel(nombre);
-        texto.setForeground(TEXTO);
-        leyenda.add(muestra);
-        leyenda.add(texto);
+        muestra.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 15));
+        item.add(muestra);
+        item.add(etiqueta(nombre, FUENTE));
+        leyenda.add(item);
     }
 
     private JPanel construirControles() {
-        JPanel pie = new JPanel(new BorderLayout());
-        pie.setBackground(SUPERFICIE);
-        pie.setBorder(BorderFactory.createEmptyBorder(8, 12, 8, 12));
-        JPanel controles = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
+        JPanel controles = new JPanel(new FlowLayout(FlowLayout.CENTER, 9, 7));
         controles.setBackground(SUPERFICIE);
         botonPausa.addActionListener(evento -> alternarPausa());
         botonPaso.addActionListener(evento -> {
@@ -203,39 +247,44 @@ public final class VentanaLaberinto extends JFrame {
             siguientePaso();
         });
         botonFinal.addActionListener(evento -> terminarAnimacion());
+        botonAjustar.addActionListener(evento -> ajustarZoom());
         controles.add(botonPausa);
         controles.add(botonPaso);
         controles.add(botonFinal);
-        controles.add(etiqueta("Velocidad"));
-        velocidad.setBackground(SUPERFICIE);
-        velocidad.setPreferredSize(new Dimension(105, 28));
+        controles.add(etiqueta("Velocidad:", FUENTE));
         controles.add(velocidad);
-        controles.add(etiqueta("Zoom"));
-        zoom.setBackground(SUPERFICIE);
-        zoom.setPreferredSize(new Dimension(105, 28));
+        controles.add(etiqueta("Zoom:", FUENTE));
         controles.add(zoom);
-        pie.add(controles, BorderLayout.NORTH);
-        estado.setForeground(TEXTO);
-        estado.setBorder(BorderFactory.createEmptyBorder(8, 3, 2, 0));
-        pie.add(estado, BorderLayout.SOUTH);
+        controles.add(botonAjustar);
+        return controles;
+    }
+
+    private JPanel construirComparacion() {
+        JPanel comparacion = new JPanel(new BorderLayout(0, 10));
+        comparacion.setBackground(FONDO);
+        JPanel cabecera = new JPanel(new FlowLayout(FlowLayout.LEFT, 12, 12));
+        cabecera.setBackground(SUPERFICIE);
+        JButton volver = boton("Volver");
+        volver.addActionListener(evento -> tarjetas.show(centro, "principal"));
+        cabecera.add(volver);
+        cabecera.add(etiqueta("Comparación de soluciones", FUENTE_TITULO));
+        comparacion.add(cabecera, BorderLayout.NORTH);
+        filaComparacion.setLayout(new BoxLayout(filaComparacion, BoxLayout.X_AXIS));
+        filaComparacion.setBackground(FONDO);
+        filaComparacion.setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
+        JScrollPane scroll = new JScrollPane(filaComparacion);
+        scroll.getViewport().setBackground(FONDO);
+        scroll.setBorder(BorderFactory.createEmptyBorder());
+        comparacion.add(scroll, BorderLayout.CENTER);
+        return comparacion;
+    }
+
+    private JPanel construirPie() {
+        JPanel pie = new JPanel(new BorderLayout());
+        pie.setBackground(SUPERFICIE);
+        pie.setBorder(BorderFactory.createEmptyBorder(7, 14, 7, 14));
+        pie.add(estado, BorderLayout.WEST);
         return pie;
-    }
-
-    private static JLabel etiqueta(String texto) {
-        JLabel etiqueta = new JLabel(texto);
-        etiqueta.setForeground(TEXTO);
-        return etiqueta;
-    }
-
-    private static JButton boton(String texto) {
-        JButton boton = new JButton(texto);
-        boton.setFocusPainted(false);
-        boton.setBackground(new Color(53, 68, 87));
-        boton.setForeground(TEXTO);
-        boton.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(new Color(80, 102, 127)),
-                BorderFactory.createEmptyBorder(7, 11, 7, 11)));
-        return boton;
     }
 
     private void cargar() {
@@ -264,18 +313,24 @@ public final class VentanaLaberinto extends JFrame {
                     laberinto = carga.laberinto();
                     grafo = carga.grafo();
                     resultados.clear();
-                    quitarComparaciones();
                     panelPrincipal.setLaberinto(laberinto);
-                    vistas.setSelectedIndex(0);
-                    estado.setText("Laberinto cargado: " + laberinto.getFilas()
-                            + " filas × " + laberinto.getColumnas() + " columnas.");
+                    panelPrincipal.setEstado(Set.of(), -1, Set.of());
+                    progreso.setIndeterminate(false);
+                    progreso.setMaximum(1);
+                    progreso.setValue(0);
+                    progreso.setString("Sin exploración");
+                    titulo.setText("Laberinto: " + ruta.getFileName());
+                    tarjetas.show(centro, "principal");
+                    estado.setText("Cargado: " + ruta.getFileName() + " ("
+                            + laberinto.getFilas() + "x" + laberinto.getColumnas() + ")");
+                    SwingUtilities.invokeLater(() -> ajustarZoom());
                 } catch (InterruptedException error) {
                     Thread.currentThread().interrupt();
                     mostrarError(error);
                 } catch (ExecutionException | CancellationException error) {
                     mostrarError(error);
                 }
-                actualizarInformacion();
+                actualizarResultados();
                 actualizarControles();
             }
         };
@@ -286,12 +341,13 @@ public final class VentanaLaberinto extends JFrame {
     private void resolver(Algoritmo algoritmo) {
         if (grafo == null || ocupado) return;
         detenerAnimacion();
-        quitarComparaciones();
-        vistas.setSelectedIndex(0);
+        tarjetas.show(centro, "principal");
         panelPrincipal.setEstado(Set.of(), -1, Set.of());
         ocupado = true;
         actualizarControles();
-        estado.setText("Calculando " + algoritmo.nombre + "...");
+        titulo.setText("Algoritmo: " + algoritmo.nombre + " · Calculando...");
+        progreso.setIndeterminate(true);
+        estado.setText("Resolviendo con " + algoritmo.nombre + "...");
         long solicitud = ++generacion;
         Grafo grafoActual = grafo;
         SwingWorker<Resultado, Void> nuevo = new SwingWorker<>() {
@@ -305,10 +361,11 @@ public final class VentanaLaberinto extends JFrame {
             protected void done() {
                 if (solicitud != generacion) return;
                 ocupado = false;
+                progreso.setIndeterminate(false);
                 try {
                     Resultado resultado = get();
                     resultados.put(algoritmo, resultado);
-                    actualizarInformacion();
+                    actualizarResultados();
                     iniciarAnimacion(algoritmo, resultado);
                 } catch (InterruptedException error) {
                     Thread.currentThread().interrupt();
@@ -325,10 +382,10 @@ public final class VentanaLaberinto extends JFrame {
 
     private void mostrarTres() {
         if (grafo == null || ocupado) return;
-        detenerAnimacion();
+        if (animando) terminarAnimacion();
         ocupado = true;
         actualizarControles();
-        estado.setText("Preparando las tres soluciones...");
+        estado.setText("Preparando comparación...");
         long solicitud = ++generacion;
         Grafo grafoActual = grafo;
         EnumMap<Algoritmo, Resultado> vigentes = new EnumMap<>(resultados);
@@ -350,9 +407,9 @@ public final class VentanaLaberinto extends JFrame {
                 ocupado = false;
                 try {
                     resultados.putAll(get());
-                    mostrarComparaciones();
-                    actualizarInformacion();
-                    estado.setText("Tres soluciones listas. Selecciona una pestaña para ver el resultado.");
+                    actualizarResultados();
+                    mostrarComparacion();
+                    estado.setText("Comparación lista.");
                 } catch (InterruptedException error) {
                     Thread.currentThread().interrupt();
                     mostrarError(error);
@@ -364,6 +421,46 @@ public final class VentanaLaberinto extends JFrame {
         };
         trabajo = nuevo;
         nuevo.execute();
+    }
+
+    private void mostrarComparacion() {
+        filaComparacion.removeAll();
+        for (Algoritmo algoritmo : Algoritmo.values()) {
+            Resultado resultado = resultados.get(algoritmo);
+            filaComparacion.add(construirTarjetaComparacion(algoritmo, resultado));
+            filaComparacion.add(Box.createHorizontalStrut(12));
+        }
+        filaComparacion.revalidate();
+        filaComparacion.repaint();
+        tarjetas.show(centro, "comparacion");
+    }
+
+    private JPanel construirTarjetaComparacion(Algoritmo algoritmo, Resultado resultado) {
+        JPanel tarjeta = new JPanel(new BorderLayout(0, 10));
+        tarjeta.setBackground(TARJETA);
+        tarjeta.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(new Color(76, 94, 116)),
+                BorderFactory.createEmptyBorder(12, 12, 12, 12)));
+        tarjeta.setPreferredSize(new Dimension(350, 390));
+        tarjeta.setMaximumSize(new Dimension(350, 390));
+        tarjeta.add(etiqueta(algoritmo.nombre, FUENTE_TITULO), BorderLayout.NORTH);
+        PanelLaberinto mini = new PanelLaberinto();
+        mini.setTamanoCelda(Math.max(5, Math.min(18,
+                Math.min(300 / laberinto.getColumnas(), 220 / laberinto.getFilas()))));
+        mini.setLaberinto(laberinto);
+        mini.setEstado(ids(resultado.getVisitados()), -1, ids(resultado.getCamino()));
+        JScrollPane miniScroll = scroll(mini);
+        miniScroll.setPreferredSize(new Dimension(320, 250));
+        tarjeta.add(miniScroll, BorderLayout.CENTER);
+        JPanel datos = new JPanel(new GridLayout(0, 1, 0, 4));
+        datos.setBackground(TARJETA);
+        datos.add(etiqueta("Visitados: " + resultado.getVisitados().size(), FUENTE));
+        datos.add(etiqueta(resultado.isEncontrado()
+                ? "Longitud: " + (resultado.getCamino().size() - 1) + " movimientos"
+                : "No existe camino", FUENTE));
+        datos.add(etiqueta("Tiempo: " + tiempo(resultado), FUENTE));
+        tarjeta.add(datos, BorderLayout.SOUTH);
+        return tarjeta;
     }
 
     private static void ejecutar(Grafo grafo, Algoritmo algoritmo) {
@@ -382,25 +479,6 @@ public final class VentanaLaberinto extends JFrame {
         };
     }
 
-    private void mostrarComparaciones() {
-        quitarComparaciones();
-        for (Algoritmo algoritmo : Algoritmo.values()) {
-            PanelLaberinto panel = new PanelLaberinto();
-            panel.setTamanoCelda(zoom.getValue());
-            panel.setLaberinto(laberinto);
-            Resultado resultado = resultados.get(algoritmo);
-            panel.setEstado(ids(resultado.getVisitados()), -1, ids(resultado.getCamino()));
-            paneles.put(algoritmo, panel);
-            vistas.addTab(algoritmo.nombre, crearScroll(panel));
-        }
-        vistas.setSelectedIndex(1);
-    }
-
-    private void quitarComparaciones() {
-        while (vistas.getTabCount() > 1) vistas.removeTabAt(1);
-        paneles.clear();
-    }
-
     private void iniciarAnimacion(Algoritmo algoritmo, Resultado resultado) {
         algoritmoAnimado = algoritmo;
         resultadoAnimado = resultado;
@@ -408,10 +486,13 @@ public final class VentanaLaberinto extends JFrame {
         visitados.clear();
         paso = 0;
         animando = true;
+        progreso.setMaximum(Math.max(1, orden.size()));
+        progreso.setValue(0);
+        progreso.setString("0 / " + orden.size());
+        titulo.setText("Algoritmo: " + algoritmo.nombre + " · Paso 0 de " + orden.size());
         botonPausa.setText("Pausar");
         reloj.setDelay(demora());
         reloj.start();
-        estado.setText(algoritmo.nombre + ": exploración 0 / " + orden.size());
     }
 
     private void siguientePaso() {
@@ -423,8 +504,10 @@ public final class VentanaLaberinto extends JFrame {
         Vertice vertice = orden.get(paso++);
         visitados.add(vertice.getId());
         panelPrincipal.setEstado(visitados, vertice.getId(), Set.of());
-        estado.setText(algoritmoAnimado.nombre + ": exploración " + paso
-                + " / " + orden.size());
+        progreso.setValue(paso);
+        progreso.setString(paso + " / " + orden.size());
+        titulo.setText("Algoritmo: " + algoritmoAnimado.nombre + " · Paso " + paso
+                + " de " + orden.size());
     }
 
     private void terminarAnimacion() {
@@ -433,10 +516,12 @@ public final class VentanaLaberinto extends JFrame {
         animando = false;
         panelPrincipal.setEstado(ids(resultadoAnimado.getVisitados()), -1,
                 ids(resultadoAnimado.getCamino()));
+        progreso.setValue(orden.size());
+        progreso.setString(orden.size() + " / " + orden.size());
+        titulo.setText("Algoritmo: " + algoritmoAnimado.nombre + " · Resultado final");
         estado.setText(resultadoAnimado.isEncontrado()
-                ? algoritmoAnimado.nombre + ": camino de "
-                        + (resultadoAnimado.getCamino().size() - 1) + " movimientos."
-                : algoritmoAnimado.nombre + ": No existe camino.");
+                ? "Camino de " + (resultadoAnimado.getCamino().size() - 1) + " movimientos."
+                : "No existe camino entre la entrada y la salida.");
         actualizarControles();
     }
 
@@ -463,8 +548,14 @@ public final class VentanaLaberinto extends JFrame {
     }
 
     private void ajustarZoom() {
+        if (laberinto == null) return;
+        Dimension area = scrollPrincipal.getViewport().getExtentSize();
+        if (area.width <= 0 || area.height <= 0) return;
+        // Reserva espacio para márgenes y barras de desplazamiento.
+        int ancho = Math.max(1, (area.width - 48) / laberinto.getColumnas());
+        int alto = Math.max(1, (area.height - 48) / laberinto.getFilas());
+        zoom.setValue(Math.max(24, Math.min(64, Math.min(ancho, alto))));
         panelPrincipal.setTamanoCelda(zoom.getValue());
-        for (PanelLaberinto panel : paneles.values()) panel.setTamanoCelda(zoom.getValue());
     }
 
     private int demora() {
@@ -473,44 +564,88 @@ public final class VentanaLaberinto extends JFrame {
 
     private void actualizarControles() {
         boolean disponible = laberinto != null && !ocupado;
-        botonDFS.setEnabled(disponible);
-        botonBFS.setEnabled(disponible);
-        botonDijkstra.setEnabled(disponible);
-        botonTres.setEnabled(disponible);
+        for (JButton boton : new JButton[] { botonDFS, botonBFS, botonDijkstra,
+                botonComparar }) {
+            boton.setEnabled(disponible);
+            boton.setToolTipText(laberinto == null ? "Primero carga un laberinto"
+                    : ocupado ? "Espera a que termine la operación" : null);
+        }
         botonPausa.setEnabled(animando);
         botonPaso.setEnabled(animando);
         botonFinal.setEnabled(animando);
+        botonAjustar.setEnabled(laberinto != null);
+        zoom.setEnabled(laberinto != null);
+        velocidad.setEnabled(animando);
     }
 
-    private void actualizarInformacion() {
-        StringBuilder texto = new StringBuilder();
-        for (Algoritmo algoritmo : Algoritmo.values()) {
-            Resultado resultado = resultados.get(algoritmo);
-            texto.append(algoritmo.nombre).append('\n');
-            if (resultado == null) {
-                texto.append("  Pendiente\n\n");
-            } else {
-                texto.append("  Visitados: ").append(resultado.getVisitados().size()).append('\n');
-                if (resultado.isEncontrado()) {
-                    texto.append("  Longitud: ").append(resultado.getCamino().size() - 1)
-                            .append(" movimientos\n");
-                } else {
-                    texto.append("  No existe camino\n");
-                }
-                texto.append("  Tiempo: ").append(resultado.getTiempoNanos())
-                        .append(" ns\n\n");
+    private void actualizarResultados() {
+        resultadosPanel.removeAll();
+        resultadosPanel.setBorder(BorderFactory.createEmptyBorder(14, 12, 14, 12));
+        JLabel encabezado = etiqueta("RESULTADOS", FUENTE_TITULO);
+        encabezado.setAlignmentX(LEFT_ALIGNMENT);
+        resultadosPanel.add(encabezado);
+        resultadosPanel.add(Box.createVerticalStrut(12));
+        long mejorVisita = Long.MAX_VALUE;
+        long mejorCamino = Long.MAX_VALUE;
+        int cantidad = 0;
+        int conCamino = 0;
+        for (Resultado resultado : resultados.values()) {
+            cantidad++;
+            mejorVisita = Math.min(mejorVisita, resultado.getVisitados().size());
+            if (resultado.isEncontrado()) {
+                conCamino++;
+                mejorCamino = Math.min(mejorCamino, resultado.getCamino().size() - 1);
             }
         }
-        informacion.setText(texto.toString());
+        for (Algoritmo algoritmo : Algoritmo.values()) {
+            Resultado resultado = resultados.get(algoritmo);
+            JPanel tarjeta = new JPanel();
+            tarjeta.setLayout(new BoxLayout(tarjeta, BoxLayout.Y_AXIS));
+            tarjeta.setBackground(TARJETA);
+            tarjeta.setBorder(BorderFactory.createCompoundBorder(
+                    BorderFactory.createLineBorder(new Color(76, 94, 116)),
+                    BorderFactory.createEmptyBorder(10, 11, 10, 11)));
+            tarjeta.setAlignmentX(LEFT_ALIGNMENT);
+            tarjeta.setMaximumSize(new Dimension(Integer.MAX_VALUE, 180));
+            tarjeta.add(etiqueta(algoritmo.nombre, FUENTE_TITULO));
+            tarjeta.add(Box.createVerticalStrut(6));
+            if (resultado == null) {
+                tarjeta.add(etiqueta("Pendiente", FUENTE));
+            } else {
+                tarjeta.add(etiqueta("Visitados: " + resultado.getVisitados().size(), FUENTE));
+                tarjeta.add(Box.createVerticalStrut(3));
+                tarjeta.add(etiqueta(resultado.isEncontrado()
+                        ? "Longitud: " + (resultado.getCamino().size() - 1) + " movimientos"
+                        : "Sin camino", FUENTE));
+                tarjeta.add(Box.createVerticalStrut(3));
+                tarjeta.add(etiqueta("Tiempo: " + tiempo(resultado), FUENTE));
+                if (cantidad >= 2 && resultado.getVisitados().size() == mejorVisita) {
+                    tarjeta.add(distincion("Menos visitados"));
+                }
+                if (conCamino >= 2 && resultado.isEncontrado()
+                        && resultado.getCamino().size() - 1 == mejorCamino) {
+                    tarjeta.add(distincion("Camino mínimo"));
+                }
+            }
+            resultadosPanel.add(tarjeta);
+            resultadosPanel.add(Box.createVerticalStrut(10));
+        }
+        resultadosPanel.revalidate();
+        resultadosPanel.repaint();
+    }
+
+    private static JLabel distincion(String texto) {
+        JLabel etiqueta = etiqueta("★ " + texto, FUENTE);
+        etiqueta.setForeground(PanelLaberinto.SALIDA);
+        return etiqueta;
     }
 
     private void mostrarTiempos() {
-        StringBuilder texto = new StringBuilder("Tiempo de búsqueda y reconstrucción:\n\n");
+        StringBuilder texto = new StringBuilder("Búsqueda y reconstrucción:\n\n");
         for (Algoritmo algoritmo : Algoritmo.values()) {
             Resultado resultado = resultados.get(algoritmo);
             texto.append(algoritmo.nombre).append(": ")
-                    .append(resultado == null ? "pendiente" : resultado.getTiempoNanos() + " ns")
-                    .append('\n');
+                    .append(resultado == null ? "pendiente" : tiempo(resultado)).append('\n');
         }
         JOptionPane.showMessageDialog(this, texto.toString(), "Tiempos",
                 JOptionPane.INFORMATION_MESSAGE);
@@ -520,8 +655,14 @@ public final class VentanaLaberinto extends JFrame {
         Throwable causa = error instanceof ExecutionException && error.getCause() != null
                 ? error.getCause() : error;
         String motivo = causa.getMessage() == null ? causa.toString() : causa.getMessage();
-        estado.setText("No se pudo completar la operación.");
+        estado.setText("No se pudo cargar o resolver el laberinto.");
         JOptionPane.showMessageDialog(this, motivo, "Error", JOptionPane.ERROR_MESSAGE);
+    }
+
+    private static String tiempo(Resultado resultado) {
+        return resultado.getTiempoNanos() + " ns ("
+                + String.format(Locale.ROOT, "%.3f", resultado.getTiempoNanos() / 1_000_000.0)
+                + " ms)";
     }
 
     private static Set<Integer> ids(List<Vertice> vertices) {
@@ -530,9 +671,41 @@ public final class VentanaLaberinto extends JFrame {
         return ids;
     }
 
-    private static JScrollPane crearScroll(PanelLaberinto panel) {
+    private static JLabel etiqueta(String texto, Font fuente) {
+        JLabel etiqueta = new JLabel(texto);
+        etiqueta.setFont(fuente);
+        etiqueta.setForeground(TEXTO);
+        return etiqueta;
+    }
+
+    private static JButton boton(String texto) {
+        JButton boton = new JButton(texto);
+        boton.setFont(FUENTE);
+        boton.setFocusPainted(false);
+        boton.setBackground(new Color(53, 68, 87));
+        boton.setForeground(TEXTO);
+        boton.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(new Color(83, 105, 132)),
+                BorderFactory.createEmptyBorder(7, 11, 7, 11)));
+        return boton;
+    }
+
+    private static JSlider slider(int minimo, int maximo, int inicial) {
+        JSlider slider = new JSlider(minimo, maximo, inicial);
+        slider.setBackground(SUPERFICIE);
+        slider.setPreferredSize(new Dimension(100, 28));
+        return slider;
+    }
+
+    private static JLabel separador() {
+        JLabel separador = etiqueta("│", FUENTE);
+        separador.setForeground(SECUNDARIO);
+        return separador;
+    }
+
+    private static JScrollPane scroll(PanelLaberinto panel) {
         JScrollPane scroll = new JScrollPane(panel);
-        scroll.getViewport().setBackground(PanelLaberinto.FONDO);
+        scroll.getViewport().setBackground(FONDO);
         scroll.setBorder(BorderFactory.createEmptyBorder());
         return scroll;
     }
